@@ -138,7 +138,9 @@
 			],
 			"Greeting": [
 				{
-					"File": "motion/tsumiki_greeting.motion3.json"
+					"File": "motion/tsumiki_greeting.motion3.json",
+					"FadeInTime": 0.4,
+					"FadeOutTime": 0.5
 				}
 			]
 		}

@@ -3,178 +3,207 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Tsumiki Greeting</title>
+	<meta name="theme-color" content="#f3d3dc">
+	<title>Tsumiki says hello</title>
 	<style>
 		:root {
 			color-scheme: light;
 			font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-			background: #f7e9de;
-			color: #201a17;
+			color: #281d1a;
+			background: #f8e9df;
 		}
-
-		* {
-			box-sizing: border-box;
-		}
-
+		* { box-sizing: border-box; }
 		body {
 			margin: 0;
 			min-height: 100vh;
 			overflow: hidden;
 			background:
-				radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0) 29rem),
-				linear-gradient(135deg, #fbefe6 0%, #f3d3dc 42%, #d3ebf0 100%);
+				radial-gradient(circle at 18% 14%, rgba(255,255,255,.9), rgba(255,255,255,0) 30rem),
+				linear-gradient(135deg, #fbefe6 0%, #f3d3dc 45%, #d3ebf0 100%);
 		}
-
-		#stage {
-			display: block;
-			width: 100vw;
-			height: 100vh;
-		}
-
-		.toolbar {
+		#stage { display: block; width: 100vw; height: 100vh; }
+		.panel {
 			position: fixed;
 			left: 50%;
 			bottom: max(18px, env(safe-area-inset-bottom));
 			display: flex;
-			gap: 10px;
 			align-items: center;
+			gap: 12px;
 			max-width: calc(100vw - 24px);
 			padding: 10px;
-			border: 1px solid rgba(74, 49, 42, 0.14);
-			border-radius: 8px;
-			background: rgba(255, 250, 246, 0.84);
-			box-shadow: 0 18px 48px rgba(74, 49, 42, 0.18);
+			border: 1px solid rgba(74,49,42,.14);
+			border-radius: 12px;
+			background: rgba(255,250,246,.88);
+			box-shadow: 0 18px 48px rgba(74,49,42,.18);
 			backdrop-filter: blur(16px);
 			transform: translateX(-50%);
 		}
-
 		button {
-			min-height: 38px;
+			min-height: 40px;
 			border: 0;
-			border-radius: 6px;
-			padding: 0 14px;
+			border-radius: 8px;
+			padding: 0 16px;
 			background: #2f7b86;
-			color: #fff;
+			color: white;
 			font: inherit;
-			font-weight: 700;
+			font-weight: 750;
 			cursor: pointer;
 		}
-
-		button:hover {
-			background: #256772;
-		}
-
-		button:disabled {
-			cursor: wait;
-			opacity: 0.68;
-		}
-
+		button:hover { background: #256772; }
+		button:focus-visible { outline: 3px solid rgba(47,123,134,.35); outline-offset: 2px; }
+		button:disabled { cursor: wait; opacity: .64; }
 		#status {
-			min-width: 8ch;
-			max-width: 52vw;
+			min-width: 11ch;
+			max-width: 48vw;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 			font-size: 13px;
-			color: #5c4540;
+			color: #654b44;
 		}
-
-		@media (max-width: 540px) {
-			.toolbar {
-				width: calc(100vw - 24px);
-				justify-content: space-between;
-			}
-
-			button {
-				padding: 0 12px;
-			}
+		@media (max-width: 520px) {
+			.panel { width: calc(100vw - 24px); justify-content: space-between; }
+			button { padding: 0 12px; }
 		}
 	</style>
 </head>
 <body>
-	<canvas id="stage"></canvas>
-	<div class="toolbar" aria-label="Motion controls">
-		<button id="replay" type="button" disabled>Replay Greeting</button>
-		<span id="status">Loading</span>
+	<canvas id="stage" aria-label="Animated Live2D character, Tsumiki, waving hello"></canvas>
+	<div class="panel" aria-live="polite">
+		<button id="replay" type="button" disabled>Wave again</button>
+		<span id="status">Loading Tsumiki…</span>
 	</div>
+	<output id="diagnostics" hidden aria-hidden="true"></output>
 
 	<script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js"></script>
 	<script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 	<script>
-		const canvas = document.getElementById("stage");
-		const statusText = document.getElementById("status");
-		const replayButton = document.getElementById("replay");
-		const motionParams = new URLSearchParams(window.location.search);
-		const motionName = motionParams.get("motion") || "Greeting";
-		const motionIndex = Number.parseInt(motionParams.get("index") || "0", 10) || 0;
-		const app = new PIXI.Application({
-			view: canvas,
-			resizeTo: window,
-			autoStart: true,
-			antialias: true,
-			backgroundAlpha: 0
-		});
+		(() => {
+			const canvas = document.getElementById("stage");
+			const statusText = document.getElementById("status");
+			const replayButton = document.getElementById("replay");
+			const diagnosticsText = document.getElementById("diagnostics");
+			const query = new URLSearchParams(window.location.search);
+			const motionGroup = query.get("motion") || "Greeting";
+			const motionIndex = Number.parseInt(query.get("index") || "0", 10) || 0;
+			const trackedParameters = [
+				"PARAM_ARM", "PARAM_ARM_R", "PARAM_ARM_L", "PARAM_FINGER",
+				"PARAM_ANGLE_Z", "PARAM_EYE_L_SMILE", "PARAM_MOUTH_FORM",
+				"PARAM_CHEEK_01", "PARAM_BREATH", "PARAM_HAIR_FRONT", "PARAM_HAIR_SIDE"
+			];
+			const app = new PIXI.Application({
+				view: canvas,
+				resizeTo: window,
+				autoStart: true,
+				antialias: true,
+				backgroundAlpha: 0
+			});
+			const state = {
+				ready: false,
+				modelLoaded: false,
+				motionRequested: false,
+				motionStarted: false,
+				error: null,
+				sampledFrames: 0,
+				ranges: {}
+			};
+			let model;
+			let naturalWidth = 1;
+			let naturalHeight = 1;
 
-		let model;
-		let naturalWidth = 1;
-		let naturalHeight = 1;
-
-		function setStatus(text) {
-			statusText.textContent = text;
-		}
-
-		function fitModel() {
-			if (!model) return;
-			const width = app.renderer.width;
-			const height = app.renderer.height;
-			const scale = Math.min(width / naturalWidth * 0.72, height / naturalHeight * 0.88);
-			model.scale.set(scale);
-			model.position.set(width * 0.5, height * 0.56);
-		}
-
-		async function playGreeting() {
-			if (!model) return;
-			replayButton.disabled = true;
-			try {
-				await model.motion(motionName, motionIndex, 3);
-				setStatus(motionName);
-			} catch (error) {
-				console.error(error);
-				setStatus("Motion error");
-			} finally {
-				replayButton.disabled = false;
+			function setStatus(text) {
+				statusText.textContent = text;
 			}
-		}
 
-		async function boot() {
-			try {
-				model = await PIXI.live2d.Live2DModel.from("tsumiki.model3.json", {
-					autoInteract: false
+			function fitModel() {
+				if (!model) return;
+				const width = app.renderer.width;
+				const height = app.renderer.height;
+				const scale = Math.min(width / naturalWidth * 0.78, height / naturalHeight * 0.9);
+				model.scale.set(scale);
+				model.position.set(width * 0.5, height * 0.53);
+			}
+
+			function playGreeting() {
+				if (!model) return Promise.resolve(false);
+				replayButton.disabled = true;
+				state.motionRequested = true;
+				setStatus(motionGroup + " playing");
+				const request = Promise.resolve(model.motion(motionGroup, motionIndex, 3));
+				request.then((started) => {
+					state.motionStarted = started !== false;
+					replayButton.disabled = false;
+				}).catch((error) => {
+					state.error = String(error);
+					setStatus("Motion error");
+					replayButton.disabled = false;
+					console.error(error);
 				});
-				model.anchor.set(0.5, 0.5);
-				naturalWidth = model.width || 1;
-				naturalHeight = model.height || 1;
-				app.stage.addChild(model);
-				fitModel();
-				replayButton.addEventListener("click", playGreeting);
-				setStatus("Ready");
-				await playGreeting();
-			} catch (error) {
-				console.error(error);
-				setStatus("Load error");
+				return request;
 			}
-		}
 
-		window.addEventListener("resize", fitModel);
-		window.tsumikiGreetingViewer = {
-			app,
-			playGreeting,
-			get model() {
-				return model;
+			function getParameterValue(id) {
+				const core = model && model.internalModel && model.internalModel.coreModel;
+				return core && typeof core.getParameterValueById === "function"
+					? core.getParameterValueById(id)
+					: null;
 			}
-		};
-		boot();
+
+			function recordDiagnostics() {
+				if (!model) return;
+				for (const id of trackedParameters) {
+					const value = getParameterValue(id);
+					if (!Number.isFinite(value)) continue;
+					const range = state.ranges[id] || { min: value, max: value, current: value };
+					range.min = Math.min(range.min, value);
+					range.max = Math.max(range.max, value);
+					range.current = value;
+					state.ranges[id] = range;
+				}
+				state.sampledFrames += 1;
+				diagnosticsText.textContent = JSON.stringify(state);
+			}
+
+			async function boot() {
+				try {
+					model = await PIXI.live2d.Live2DModel.from("./tsumiki.model3.json", {
+						autoInteract: false
+					});
+					state.modelLoaded = true;
+					model.anchor.set(0.5, 0.5);
+					naturalWidth = model.width || 1;
+					naturalHeight = model.height || 1;
+					app.stage.addChild(model);
+					app.ticker.add(recordDiagnostics);
+					fitModel();
+					replayButton.addEventListener("click", playGreeting);
+					replayButton.disabled = false;
+					playGreeting();
+					state.ready = true;
+					return model;
+				} catch (error) {
+					state.error = String(error);
+					setStatus("Could not load Tsumiki");
+					console.error(error);
+					throw error;
+				}
+			}
+
+			window.addEventListener("resize", fitModel);
+			window.addEventListener("error", (event) => {
+				state.error = event.message || "Page error";
+			});
+			const ready = boot();
+			window.tsumikiGreetingViewer = {
+				app,
+				state,
+				ready,
+				playGreeting,
+				getParameterValue,
+				get model() { return model; }
+			};
+		})();
 	</script>
 </body>
 </html>
